@@ -1,0 +1,12 @@
+[submodule "upstream/software-agent-sdk"]
+	path = upstream/software-agent-sdk
+	url = https://github.com/OpenHands/software-agent-sdk.git
+[submodule "upstream/extensions"]
+	path = upstream/extensions
+	url = https://github.com/OpenHands/extensions.git
+[submodule "upstream/automation"]
+	path = upstream/automation
+	url = https://github.com/OpenHands/automation.git
+[submodule "upstream/OpenHands-CLI"]
+	path = upstream/OpenHands-CLI
+	url = https://github.com/OpenHands/OpenHands-CLI.git
