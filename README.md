@@ -38,6 +38,7 @@ agent 架构已全部迁出到 `software-agent-sdk`。
 | [12-workspace-and-server](notes/12-workspace-and-server.md) | 执行环境与服务端：五方法抽象、认证分组、日志纪律 |
 | [13-tool-implementations](notes/13-tool-implementations.md) | 具体工具：tmux 保状态、原子写入、子 agent 委派 |
 | [14-hooks](notes/14-hooks.md) | 钩子系统：退出码协议、提示注入隔离、异步进程管理 |
+| [15-routing](notes/15-routing.md) | 模型路由：确定性路由器 vs 元配置分类路由、账外开销 |
 
 ## 拉取
 
