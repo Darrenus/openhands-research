@@ -40,6 +40,7 @@ agent 架构已全部迁出到 `software-agent-sdk`。
 | [14-hooks](notes/14-hooks.md) | 钩子系统：退出码协议、提示注入隔离、异步进程管理 |
 | [15-routing](notes/15-routing.md) | 模型路由：确定性路由器 vs 元配置分类路由、账外开销 |
 | [16-skills-loading](notes/16-skills-loading.md) | 技能加载：三层优先级、按可变性分层缓存、符号链接逃逸防护 |
+| [17-acp-agent](notes/17-acp-agent.md) | ACP 适配层：驱动外部 agent、空闲超时 vs 硬超时、厂商差异表 |
 
 ## 拉取
 
