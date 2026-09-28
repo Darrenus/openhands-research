@@ -37,6 +37,7 @@ agent 架构已全部迁出到 `software-agent-sdk`。
 | [11-tool-layer](notes/11-tool-layer.md) | 工具层：三种来源一个接口、唯一出口脱敏 |
 | [12-workspace-and-server](notes/12-workspace-and-server.md) | 执行环境与服务端：五方法抽象、认证分组、日志纪律 |
 | [13-tool-implementations](notes/13-tool-implementations.md) | 具体工具：tmux 保状态、原子写入、子 agent 委派 |
+| [14-hooks](notes/14-hooks.md) | 钩子系统：退出码协议、提示注入隔离、异步进程管理 |
 
 ## 拉取
 
