@@ -20,9 +20,23 @@ agent 架构已全部迁出到 `software-agent-sdk`。
 
 ## 笔记
 
-- [`notes/01-sdk-architecture.md`](notes/01-sdk-architecture.md) — SDK 整体架构拆解：
-  事件树、上下文视图与安全切点、两层主循环、错误恢复策略、安全纵深防御、
-  Critic 迭代精修、多 agent 委派。附精读顺序。
+精读顺序即阅读顺序，每篇自带"可迁移结论"小节。
+
+| 笔记 | 主题 |
+|---|---|
+| [01-sdk-architecture](notes/01-sdk-architecture.md) | 整体架构拆解 + 精读路线 |
+| [02-event-model](notes/02-event-model.md) | 事件模型：不可变账本、事件树、并行工具调用的还原 |
+| [03-view-and-properties](notes/03-view-and-properties.md) | 上下文视图：可操作位置与四条结构规则 |
+| [04-agent-step](notes/04-agent-step.md) | 单步决策：四道门、四种错误恢复、并行执行与资源锁 |
+| [05-run-loop](notes/05-run-loop.md) | 外层循环：预算、暂停、卡死检测、并发消息不丢 |
+| [06-condenser](notes/06-condenser.md) | 压缩器：硬压软压、砍到一半、四级降级 |
+| [07-security](notes/07-security.md) | 安全体系：五层检测、shell 语法解析、失败关闭 |
+| [08-critic](notes/08-critic.md) | 评审员：可验证的预测、失败模式图谱、迭代精修 |
+| [09-context-engineering](notes/09-context-engineering.md) | 提示装配与技能：前缀缓存、渐进式披露、路径规则 |
+| [10-llm-seam](notes/10-llm-seam.md) | 模型接缝：能力表、非原生函数调用、三层降级 |
+| [11-tool-layer](notes/11-tool-layer.md) | 工具层：三种来源一个接口、唯一出口脱敏 |
+| [12-workspace-and-server](notes/12-workspace-and-server.md) | 执行环境与服务端：五方法抽象、认证分组、日志纪律 |
+| [13-tool-implementations](notes/13-tool-implementations.md) | 具体工具：tmux 保状态、原子写入、子 agent 委派 |
 
 ## 拉取
 
