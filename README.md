@@ -42,6 +42,7 @@ agent 架构已全部迁出到 `software-agent-sdk`。
 | [16-skills-loading](notes/16-skills-loading.md) | 技能加载：三层优先级、按可变性分层缓存、符号链接逃逸防护 |
 | [17-acp-agent](notes/17-acp-agent.md) | ACP 适配层：驱动外部 agent、空闲超时 vs 硬超时、厂商差异表 |
 | [18-browser-and-patch](notes/18-browser-and-patch.md) | 浏览器与补丁工具：fuzz 分数量化不确定性、注入 JS、分级错误策略 |
+| [19-secrets-and-git](notes/19-secrets-and-git.md) | 密钥与 git：引用而非持有、流式脱敏算法、两种 diff 基准 |
 
 ## 拉取
 
