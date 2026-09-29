@@ -46,6 +46,7 @@ agent 架构已全部迁出到 `software-agent-sdk`。
 | [20-observability-and-orchestration](notes/20-observability-and-orchestration.md) | 可观测性与编排：零成本追踪、显式上下文传递、AI 写编排代码 |
 | [21-task-manager](notes/21-task-manager.md) | 任务管理器：生命周期与驱逐、累计值陷阱、委派结果的可信度 |
 | [22-subagent-registry-and-consultants](notes/22-subagent-registry-and-consultants.md) | 子 agent 注册表与顾问工具：Markdown 定义 agent、三种求助渠道对照 |
+| [23-agent-server](notes/23-agent-server.md) | 服务层：租约与围栏令牌、双签名缓存失效、WebSocket 重连补发 |
 
 ## 拉取
 
