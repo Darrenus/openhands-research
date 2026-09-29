@@ -22,6 +22,8 @@ agent 架构已全部迁出到 `software-agent-sdk`。
 
 精读顺序即阅读顺序，每篇自带"可迁移结论"小节。
 
+**先读这个**：[`notes/00-principles-index.md`](notes/00-principles-index.md) 把 22 篇里反复出现的设计原则归并成 43 条索引，每条标注它出现在哪几节。
+
 | 笔记 | 主题 |
 |---|---|
 | [01-sdk-architecture](notes/01-sdk-architecture.md) | 整体架构拆解 + 精读路线 |
