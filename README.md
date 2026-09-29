@@ -44,6 +44,7 @@ agent 架构已全部迁出到 `software-agent-sdk`。
 | [18-browser-and-patch](notes/18-browser-and-patch.md) | 浏览器与补丁工具：fuzz 分数量化不确定性、注入 JS、分级错误策略 |
 | [19-secrets-and-git](notes/19-secrets-and-git.md) | 密钥与 git：引用而非持有、流式脱敏算法、两种 diff 基准 |
 | [20-observability-and-orchestration](notes/20-observability-and-orchestration.md) | 可观测性与编排：零成本追踪、显式上下文传递、AI 写编排代码 |
+| [21-task-manager](notes/21-task-manager.md) | 任务管理器：生命周期与驱逐、累计值陷阱、委派结果的可信度 |
 
 ## 拉取
 
