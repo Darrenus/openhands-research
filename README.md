@@ -49,6 +49,8 @@ agent 架构已全部迁出到 `software-agent-sdk`。
 | [21-task-manager](notes/21-task-manager.md) | 任务管理器：生命周期与驱逐、累计值陷阱、委派结果的可信度 |
 | [22-subagent-registry-and-consultants](notes/22-subagent-registry-and-consultants.md) | 子 agent 注册表与顾问工具：Markdown 定义 agent、三种求助渠道对照 |
 | [23-agent-server](notes/23-agent-server.md) | 服务层：租约与围栏令牌、双签名缓存失效、WebSocket 重连补发 |
+| [24-plugins-profiles-settings](notes/24-plugins-profiles-settings.md) | 插件与配置档：格式策略模式、软外键生命周期、允许清单 vs 禁用清单 |
+| [25-remaining-tools](notes/25-remaining-tools.md) | 剩下的工具：三级后端回退、三套编辑格式按模型选、子 agent 提示范本 |
 
 ## 拉取
 
