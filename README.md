@@ -45,6 +45,7 @@ agent 架构已全部迁出到 `software-agent-sdk`。
 | [19-secrets-and-git](notes/19-secrets-and-git.md) | 密钥与 git：引用而非持有、流式脱敏算法、两种 diff 基准 |
 | [20-observability-and-orchestration](notes/20-observability-and-orchestration.md) | 可观测性与编排：零成本追踪、显式上下文传递、AI 写编排代码 |
 | [21-task-manager](notes/21-task-manager.md) | 任务管理器：生命周期与驱逐、累计值陷阱、委派结果的可信度 |
+| [22-subagent-registry-and-consultants](notes/22-subagent-registry-and-consultants.md) | 子 agent 注册表与顾问工具：Markdown 定义 agent、三种求助渠道对照 |
 
 ## 拉取
 
