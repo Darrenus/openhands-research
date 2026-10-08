@@ -213,6 +213,17 @@ def should_refine(self, critic_result) -> bool:
 
 ## 五、迭代精修的控制流（`agent/critic_mixin.py`）
 
+> **⚠️ 实跑修正（见 `notes/26-verification-run.md`）**：**迭代精修只在 AI 通过 `finish`
+> 工具收尾时才参与。** `_check_iterative_refinement` 唯一的到达路径是
+> `_ActionBatch.finalize`，而它开头就是 `if not self.has_finish: return`；
+> 而"模型只说话"那条路（`_handle_content_response`）**没有任何 critic / 精修钩子**。
+>
+> 实跑里 AI 直接用一条消息回答了问题（简单任务上很常见），
+> **整个精修回路被绕过**：计数器为空、没有注入任何追加要求。
+>
+> critic 的 `mode="finish_and_message"` 描述的是**打分**时机，
+> **重试**只挂在 `FinishAction` 上——这两件事不是一回事，本节原文把它们混为一谈了。
+
 ### 反馈信息怎么写
 
 基类版本（`base.py`）：
