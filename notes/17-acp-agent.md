@@ -260,6 +260,10 @@ def _serialize_acp_resume_session_id(self, value, info):
 
 这一段的注释信息密度极高。
 
+> **✅ 实跑补充（见 `notes/26-verification-run.md`）**：`acp_isolate_data_dir` 的**默认值是 `False`**，
+> 这个隔离是 **opt-in**。实跑打开它（API-key 认证模式）没有任何问题，
+> 验证了下面注释里那句"重定位 `CLAUDE_CONFIG_DIR` 在两种认证模式下都安全"。
+
 ```python
 def _isolate_acp_data_dir(self, state, env: dict[str, str]) -> None:
     """Relocate the CLI's data/config root to a per-conversation directory.
@@ -580,7 +584,7 @@ if not cost_recorded and not input_tokens and not output_tokens:
                  self._agent_name or "unknown")
 ```
 
-**Gemini CLI 目前不返回任何用量数据**，而且原因有两层：
+**（实跑补充：Claude Code 会返回，但只有花费可信——`prompt=18/completion=225` 明显只是最后一条消息，远端内部多轮没计入。见 `notes/26-verification-run.md`。）** **Gemini CLI 目前不返回任何用量数据**，而且原因有两层：
 它自己返回 `None`，加上 ACP SDK 在序列化时把 `_meta` 剥掉了。
 **上游 issue 编号都记着。**
 

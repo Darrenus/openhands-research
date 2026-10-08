@@ -660,3 +660,110 @@ critic 的 `mode="finish_and_message"` 描述的是**打分**时机,
 > **索引第 39 条那套"配置自相矛盾在创建时报错"的纪律,在这个旋钮上缺了一块。**
 > 而且这个缺口有传染性：`extended_thinking_budget` 的默认值是 200,000,
 > 大多数人不会去改它,所以这个洞长期不会被发现。
+
+---
+
+# 第三轮：ACP 驱动 Claude Code（$0.0142）
+
+预估 $0.3–1.0,**实际 $0.0142** —— 因为一个 ACP step 就是一个完整远端回合,
+而一个回合做完这个小任务只需要一次。
+
+## 离线就对上的（$0）
+
+```
+default_command:      ['npx','-y','--prefer-offline','@agentclientprotocol/claude-agent-acp@0.63.0']
+api_key_env_var:      ANTHROPIC_API_KEY
+default_session_mode: bypassPermissions            ← 第 16 节逐字命中
+data_dir_env_var:     CLAUDE_CONFIG_DIR            ← 第 16 节逐字命中
+env_conflicts:        CLAUDE_CODE_OAUTH_TOKEN → 剥掉 [ANTHROPIC_API_KEY, ANTHROPIC_BASE_URL]
+supports_runtime_model_switch: True
+```
+
+**环境变量冲突规则确实是按 OAuth token 做键,不是按配置目录** ——
+正是第 16 节讲的那个 #3588 修法。
+
+**补一条笔记没写的**：`acp_isolate_data_dir` 默认是 **False**,
+per-conversation 数据目录隔离是 **opt-in**。
+
+## 实跑验证到的
+
+### ① 一个 step = 一个远端回合 + 合成一个 FinishAction（第 16 节第一条）
+
+```
+事件类型 = {MessageEvent: 1, SystemPromptEvent: 1,
+            ACPToolCallEvent: 2, ActionEvent: 1, ObservationEvent: 1}
+ActionEvent tool=finish action=FinishAction
+```
+
+**整个会话只有一个 `ActionEvent`,而它就是那个合成的 `finish`。**
+第 16 节说"ACPAgent 在每步结束时发一个终结 `FinishAction` 来界定这个回合" ——
+**精确命中。** 而且 `ObservationEvent: 1` 与它配对,
+**动作/观察配对的不变量对合成动作同样成立。**
+
+### ② 远端的工具调用不变成 OpenHands 的动作事件
+
+远端 agent 做了 2 次工具调用,它们以 **`ACPToolCallEvent`** 的形式出现 ——
+**不是 `ActionEvent`/`ObservationEvent`。**
+
+这解释了为什么 `supports_openhands_tools=False` 是自洽的：
+**远端工具调用是信息性事件,不进 OpenHands 的动作流。**
+
+### ③ `has_live_acp_session` 的时机
+
+```
+run 之前 = False      run 之后 = True
+```
+
+第 16 节说它"只有在子进程支撑的会话完全接好之后才是 True ——
+而那发生在第一次 `run()` 期间"。**命中。**
+
+### ④ 协议上报的模型信息
+
+```
+agent_name = '@agentclientprotocol/claude-agent-acp'   version = '0.63.0'
+current_model_id = 'haiku'                              ← 我请求的被采纳了
+available_models = ['default', 'opus[1m]', 'sonnet', 'haiku']
+```
+
+`available_models` 是第 16 节说的"原样来自 `models.availableModels`
+（UNSTABLE ACP 能力）"。注意里面有 **`opus[1m]`** —— 1M 上下文变体。
+
+### ⑤ 用量上报：花费可信,token 数不可信 ⚠️ 补充第 16 节
+
+```
+[cost] acp-managed  $0.014217  prompt=18  completion=225
+```
+
+第 16 节记录了 gemini-cli **完全不返回**用量。Claude Code **会返回**,但：
+
+- **`$0.0142` 看起来是真实花费**（读了文件、做了 2 次工具调用）
+- **`prompt=18 / completion=225` 明显不完整** —— 那大概只是最后一条助手消息,
+  远端内部的多轮调用没有被计入
+
+> **所以 ACP 的用量数据要分开看待：花费是权威的,token 计数是局部的。**
+> 用 token 数去推算成本或判断上下文压力,在 ACP 路径上会严重偏低。
+> 而 `usage_id` 是 `acp-managed` —— 一个专门的桶,和本地 agent 的桶分开。
+
+### ⑥ 数据目录隔离在 API-key 模式下确实安全
+
+`acp_isolate_data_dir=True` 跑通,没有认证失败 ——
+验证第 16 节那句"重定位 `CLAUDE_CONFIG_DIR` 在两种认证模式下都安全"。
+
+## 又一个免费发现：ACP 路径不规范化工作区路径
+
+`workspace="."` 对普通 Agent 完全正常,但 ACP 启动时被远端拒绝：
+
+```
+acp.exceptions.RequestError: Invalid params: `cwd` must be an absolute path,
+                             but received: .
+```
+
+**SDK 把 `.` 原样传给了 ACP 服务器,没有做绝对化。**
+
+对比 `file_editor` 那次：**本地校验 + 把正确的绝对路径算出来建议给模型**。
+**同一类问题,两条路径的处理质量差很多** ——
+而 ACP 这条的错误还要穿过一次 JSONRPC 才到用户面前。
+
+> **可迁移的道理**：**一个参数在不同执行后端上的约束可能不同
+> （本地接受相对路径,远端只接受绝对路径）。**
+> 这类差异应该在进入后端之前被规范掉,而不是让远端的报错冒上来。
