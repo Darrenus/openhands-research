@@ -135,7 +135,14 @@ def _budget_exceeded_detail(self) -> str | None:
     return f"Agent reached maximum budget limit (${...:.4f}); accumulated cost ${spent:.4f}."
 ```
 
-注释点明了两道闸门的分工：**步数管次数，预算管钱**。为什么两个都要？因为一步的花费差别
+注释点明了两道闸门的分工：**步数管次数，预算管钱**。
+
+> **⚠️ 实跑修正（见 `notes/26-verification-run.md`）**：这两道闸门的**可达性不对称**。
+> `max_iteration_per_run` 在公开工厂 `Conversation(...)` 的签名里，
+> 但 **`max_budget_per_run` 不在** —— 它只存在于 `LocalConversation.__init__` 上
+> （注释说它"追加在参数表末尾以免挪动已有位置参数"）。
+> **走推荐入口设不了预算上限，必须直接构造 `LocalConversation`。**
+> 一个"追加在末尾保持兼容"的参数很容易漏掉上层转发层。为什么两个都要？因为一步的花费差别
 可以很大——读一个 20 万字的文件和读一行，都算一步。
 
 关键在 `get_combined_metrics()`：**把这次运行用到的所有模型的花费加在一起**

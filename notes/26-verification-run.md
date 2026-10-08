@@ -277,3 +277,176 @@ condenser    cost=$0.022001   completion_tokens=16,557
 
 4. **成本数据会暴露文档里的隐含前提。** 如果不看那两个用量桶的对比，
    "砍到一半是为了摊销"这句话会一直看起来是对的。
+
+---
+
+# 补记（2026-10-08）：哪些结论其实是"模型相关"的
+
+上面那 11 条写得像"全部证实",**这不够诚实**。按"什么决定了这个观察结果"重新分类：
+
+## A. 真正与模型无关的（6 条）
+
+由代码结构决定,模型只是触发器：没有 `CondensationSummaryEvent` 落盘、
+`SystemPromptEvent: 1`、`<SOUL>` 在 `<ROLE>` 前、`base_state.json` 的字段集、
+MCP 工具走同一流程、MCP 的 JSONRPC 失败（库版本问题,与模型无关）。
+
+## B. 被我过度归因的（5 条）
+
+### ① 缓存命中率 90.8% —— 这几乎完全是厂商特性
+
+我写的是"静态块在前、时间放最后的排布**是真的在省钱**"。
+
+**但 DeepSeek 有自动前缀缓存,不需要调用方做任何事。** 而 dump 出的消息里
+`cache_prompt=False` —— **SDK 的显式缓存断点机制根本没被用上。**
+
+那 90.8% 可能是 DeepSeek 的自动缓存贡献的,**不是 SDK 的排布设计贡献的**。
+要分清需要一个对照（把时间戳挪到动态块开头看命中率掉多少）,**我没做这个对照**。
+换到需要显式 `cache_control` 断点的 Anthropic 结论可能完全不同。
+
+### ② "压缩器比 agent 还贵" —— 定价结构在起作用
+
+agent 的开销主要是输入（九成走便宜的缓存）,压缩器的开销主要是输出。
+**DeepSeek 的输出单价远高于缓存输入单价,这个比例是它的定价表决定的。**
+
+而且 7 次摘要产出 16,557 token ≈ 每次 2,365 token —— 相当啰嗦。
+另一个模型给 400 token 的摘要,**结论就反过来了**。
+
+**但"摊销有最小规模要求"那条推论是靠算术成立的,与模型无关。**
+教训：**结论和证据要分开写,我当时混在一起了。**
+
+### ③ 卡死检测触发 —— 几乎纯粹是模型能力
+
+**一个强模型可能根本不会陷入那个循环。** 而且命中哪一种模式也由模型决定——
+这次命中第 1 种（动作-观察循环）,所以"推一把"没出现。
+
+我那句"没有提醒是设计使然"的论证来自**读源码**,
+**这次实跑没有证明它,只是没有反驳它。**
+
+### ④ `ActionEvent: 20 / ObservationEvent: 20` 相等 —— 是运气
+
+不变量是"每个工具调用有恰好一个**观察类**事件"。模型发畸形调用时会生成
+`AgentErrorEvent` 而非 `ObservationEvent`,**两类计数就不等,但不变量仍满足**。
+**我验证的是一个特例,不是不变量本身。**
+
+### ⑤ `summary` 字段被填了 —— 填不填是模型的事
+
+字段在 schema 里要求,弱模型可能省略,然后 `_extract_summary` 返回 `None`。
+
+## C. 完全没被触及的代码路径（比"结论可能错"更严重）
+
+日志里的 `reasoning 0` 和"一次只调一个工具"说明：
+
+| 机制 | 笔记 | 需要什么 |
+|---|---|---|
+| `ToolLoopAtomicityProperty` | 第 3 节,**整个 Property 类** | 带 thinking blocks 的模型 |
+| "thought 只存首个事件"的断言 | 第 2 节 | 推理模型 + 并行调用 |
+| `BatchAtomicityProperty` | 第 3 节 | **并行工具调用** |
+| `_combine_action_events` | 第 2 节,**全文唯一的算法** | 并行工具调用 |
+| `ParallelToolExecutor` + 资源锁 | 第 3 节 | 并行工具调用 |
+| `fn_call_converter`（963 行 XML 协议） | 第 9 节 | 不支持原生函数调用的模型 |
+| Responses API 分支 | 第 9、17 节 | OpenAI 系模型 |
+| 显式提示缓存断点 | 第 8 节 | Anthropic |
+| **tmux 终端后端 + PS1 元数据技巧** | **第 12 节** | **装了 tmux 的机器** |
+
+**最后一条是这次新发现的**：这台机器没装 tmux,日志里有
+
+```
+WARNING  tmux is not installed. Falling back to subprocess-based terminal,
+         which may be less stable. For best agent performance, install tmux
+```
+
+**所以之前所有的终端调用走的是 `SubprocessTerminal` 回退路径。**
+第 12 节笔记里那个"把元数据藏在 PS1 提示符里"的漂亮技巧,
+**一次都没有被执行过。**（而这个回退**打了警告并给出安装指引**,
+符合索引第 2 条和第 6 条。）
+
+---
+
+# 补记二：三个在"付费调用之前"免费拿到的发现
+
+尝试跑 Claude 时连续失败三次,**每次都在发出 API 请求之前**,所以花费 $0。
+但三次失败各自是一个真实发现：
+
+## 发现 1：压缩器的配置校验器真的在构造时就拦（证实索引第 39 条）
+
+把 `max_size=6, keep_first=2` 传进去,**对象创建就失败**：
+
+```
+ValidationError: Value error, keep_first must be less than max_size // 2
+                 to leave room for condensation
+```
+
+代入第 6 节笔记引的公式：`6 // 2 - 2 - 1 = 0` → `<= 0` → 拒绝。**完全一致。**
+最小可用值是 `max_size=8`。
+
+**这正是"配置的自相矛盾在创建时就报错"的实况,而且它省下了一次无意义的付费运行。**
+
+## 发现 2：预算硬闸门在公开入口上够不着 ⚠️ 需要修正第 5 节
+
+```
+TypeError: Conversation.__new__() got an unexpected keyword argument
+           'max_budget_per_run'
+```
+
+第 5 节笔记把步数上限和预算上限并列成"两道硬闸门"。
+**但 `Conversation` 这个工厂的签名里没有 `max_budget_per_run`** ——
+它只存在于 `LocalConversation.__init__` 上（注释说它"追加在参数表末尾
+以免挪动已有位置参数"）。
+
+**也就是说：走官方推荐的入口 `Conversation(...)` 设不了预算上限,
+必须直接构造 `LocalConversation`。**
+
+对比一下：`max_iteration_per_run: int = 500` **是**在工厂签名里的。
+**两道闸门的可达性并不对称** —— 笔记里"并列"的写法掩盖了这一点。
+
+> **可迁移的道理**：**一个"追加在参数表末尾以保持兼容"的参数,
+> 很容易漏掉上层的转发层。** 加参数时要把整条调用链上的工厂/包装都过一遍,
+> 否则这个功能对大多数用户等于不存在。
+
+## 发现 3：出错时真的带上了会话 ID（证实第 5 节）
+
+余额不足那次,最终抛出的是：
+
+```
+ConversationRunError: Conversation run failed for id=9d59b549-6a39-43aa-...
+```
+
+第 5 节笔记说"重新抛出时附上会话 ID 和存档目录,注释写的是 `for better UX`"。
+**实跑逐字对上。** 而且在抛出之前先发了一条 `ConversationErrorEvent`
+（日志里有 `Event type ConversationErrorEvent is ...`）—— 
+**"错误也是账本上的一条事件"也被证实。**
+
+---
+
+# 补记三：能力表落后于模型发布,而且失败是静默的
+
+为了选模型,我离线查了 SDK 的能力表：
+
+| 模型 | thinking_mode | supports_extended_thinking |
+|---|---|---|
+| `anthropic/claude-sonnet-5` | **none** | **False** |
+| `anthropic/claude-haiku-4-5-20251001` | manual | True |
+| `anthropic/claude-sonnet-4-5` | manual | True |
+
+因为 `EXTENDED_THINKING_MODELS` 这个列表里只有三项：
+
+```python
+EXTENDED_THINKING_MODELS: list[str] = [
+    "claude-sonnet-4-5", "claude-sonnet-4-6", "claude-haiku-4-5",
+]
+```
+
+**最新的 Sonnet（`claude-sonnet-5`）不在里面。** 而匹配是子串匹配,
+所以用它跑**根本不会开启扩展思考,也不会有任何警告** ——
+`thinking_mode` 静默地变成 `none`。
+
+**这和第 9 节笔记里称赞的那条"验证过的模型列表"纪律是同一张表的两面**：
+纪律让列表保持精简可信,**但列表落后于模型发布时,新模型会静默地失去能力**。
+
+> **可迁移的道理**：**"按名单启用能力"的设计,在名单落后时是静默降级的。**
+> 如果这个能力对效果影响很大（扩展思考就是),
+> 应该在"模型支持推理但不在名单里"时打一条警告 ——
+> 现在的代码在那种情况下直接返回 `"unknown"` 然后 `"none"`,一声不响。
+>
+> 顺带：**这次是靠先离线查能力表才避免了一次白花钱的运行。**
+> 对着一个库做付费验证时,**先用它自己的能力查询接口做预检**。

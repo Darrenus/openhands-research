@@ -40,6 +40,11 @@ echo $X          # 第四条 —— 空的
 
 于是 agent 的每条命令都是**往同一个活着的 shell 里打字**，状态自然就保持了。
 
+> **⚠️ 实跑说明（见 `notes/26-verification-run.md`）**：**tmux 是可选的。**
+> 机器上没装 tmux 时会回退到 `SubprocessTerminal`，并打警告 + 给出安装指引
+> （`brew install tmux`）。本节讲的 PS1 元数据技巧**只在 tmux 后端上成立**——
+> 验证那次因为机器没装 tmux，这段机制一次都没被执行过。
+
 工具的动作定义也因此比想象中复杂：
 
 ```python
