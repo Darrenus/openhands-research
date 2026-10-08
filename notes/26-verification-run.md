@@ -450,3 +450,213 @@ EXTENDED_THINKING_MODELS: list[str] = [
 >
 > 顺带：**这次是靠先离线查能力表才避免了一次白花钱的运行。**
 > 对着一个库做付费验证时,**先用它自己的能力查询接口做预检**。
+
+---
+
+# 第二轮：Claude Haiku 4.5 实跑（2026-10-08）
+
+**总花费 $0.0785**（任务 A $0.0611 + C $0.0095 + D $0.0079，任务 B 零成本）。
+三次参数错误导致的失败请求都是 400，不计费。
+
+## 任务 A：思考块 + 并行调用 + 那个关键疑点
+
+### A-1 关键疑点的答案：`summary_offset` 还是 2 —— 我猜错了
+
+五次压缩全部是 `summary_offset=2`。而**我猜错的原因，暴露了第 3 节描述里的一处不准确**：
+
+```python
+case ActionEvent() if event.thinking_blocks:
+    in_tool_loop = True          # ← 这里没有 remove(index)
+case ActionEvent() | ObservationBaseEvent():
+    if in_tool_loop:
+        manipulation_indices.remove(index)
+```
+
+**开启一个思考回合的那个下标本身没有被移除**，只有回合内的后续成员才被移除。
+**所以"可以在回合之前下刀，只是不能在回合内部下刀"** ——
+这正是 `summary_offset` 能一直等于 `keep_first` 的原因。
+
+第 3 节写的"回合内部的所有缝隙全部锁死"是对的,
+**但没写清边界是开着的,而这恰好是整个机制能正常工作的关键。**
+
+### A-2 遗忘数量从整齐变成不规则 —— 切点约束真的在起作用
+
+| 模型 | 遗忘数量序列 |
+|---|---|
+| DeepSeek（无思考回合） | 8, 7, 7, 7, 7, 7, 7 ← 整齐 |
+| **Claude（有思考回合）** | **12, 7, 8, 9, 11** ← 不规则 |
+
+因为**遗忘终点必须吸附到回合边界**,而每批动作数不同(1/3/4/5),切出的长度就不一样。
+
+**反过来说：DeepSeek 那次整齐的数字其实什么都没验证到** —— 切点约束根本没被触发。
+
+### A-3 第 2 节那条断言被完整验证
+
+```
+3 个动作: [0] thinking_blocks=1 thought=1 | [1] 0 0 | [2] 0 0
+4 个动作: [0] thinking_blocks=1 thought=1 | [1] 0 0 | [2] 0 0 | [3] 0 0
+```
+
+**每个多动作批次里只有第 0 个带思考内容**,其余全是 0。
+带思考块的动作共 7 个 = 批次总数 7 个 —— **一批一个,挂在第一个上。**
+
+并行批次分布：**1 个/批 ×2、3 个/批 ×3、4 个/批 ×1、5 个/批 ×1**。
+`_combine_action_events` 真的合并了最多 5 个调用的批次。
+
+### A-4 显式缓存 vs 自动缓存 —— 上次缺的那个对照
+
+| | cache_write | cache_read | prompt |
+|---|---|---|---|
+| Claude agent | **9,998** | 50,727 | 60,809 |
+| Claude condenser | **0** | **0** | 7,719 |
+| DeepSeek agent（上次） | 无记录 | 201,344 | 221,798 |
+
+**Claude 这边有近万个 cache_write** —— SDK 真的在为 Anthropic 显式设置缓存断点
+并为写入付费。DeepSeek 那次 `cache_prompt=False`、无写入记录。
+
+**所以上次那个 90.8% 确实是 DeepSeek 自己的自动缓存,不是 SDK 设计的功劳。**
+而压缩器 `cache_read/write` 双 0 —— 第 6 节"摘要提示不可缓存"精确命中。
+
+### A-5 一个新的成本细节：摘要器继承了扩展思考
+
+```
+condenser  reasoning_tokens=1306   ← 比 agent 的 931 还多
+```
+
+压缩器是 `llm.model_copy(...)` 出来的,第 6 节说它会**关掉流式**——
+**但没关掉扩展思考**。于是摘要调用也在烧思考 token,而且比主 agent 烧得多。
+
+### A-6 "压缩器比 agent 贵"确认是定价特异的
+
+Claude 上 agent $0.0375 (61%) / condenser $0.0237 (39%) —— **没有反超。**
+DeepSeek 上压缩器占 54%。**确认那是厂商定价结构的产物,不是机制的性质。**
+
+### A-7 顺带验证的两处
+
+`MaxIterationsReached` 触发两次并作为 `ConversationErrorEvent` 进账本;
+而且**从 ERROR 状态被新消息唤醒继续跑了** ——
+验证第 5 节那个"可唤醒状态列表包含 ERROR"。
+
+---
+
+## 任务 B：提示片段顺序对缓存前缀的影响（零成本）
+
+原计划是付费 A/B,改成**纯离线测量**:渲染两个不同时间的动态块,量共同前缀。
+
+| `DateTimeSection` 位置 | 两次渲染的共同前缀 |
+|---|---|
+| **最后（默认）** | **520 / 547 字符 = 95%** |
+| 挪到最前 | **61 / 547 字符 = 11%** |
+
+**可缓存前缀差 8.5 倍。** 第 9 节那条结论被定量验证,花费 $0。
+
+动态块开头的实际差异：
+
+```
+默认: '<SKILLS>\nThe following skills are available...'
+改后: '<CURRENT_DATETIME>\nThe current date and time is: 2026-10-08 13:00:00\n...'
+```
+
+> **方法论收获**：**"前缀稳定性"这类性质可以不花钱验证** ——
+> 渲染两次、量共同前缀就行,比跑付费 A/B 再看命中率干净得多
+> （后者还会被厂商的缓存 TTL 和自动缓存干扰）。
+
+---
+
+## 任务 C：安全分析器 + 确认模式
+
+```
+[C] status = WAITING_FOR_CONFIRMATION
+[C] 待确认动作数 = 1
+[C]   tool=terminal  security_risk=UNKNOWN  summary='Delete junk.txt file'
+[C] UserRejectObservation: source='user' reason='rejected by verification script'
+```
+
+### ✅ 验证到的
+
+- 确认模式停在 `WAITING_FOR_CONFIRMATION`
+- `get_unmatched_actions` 找到了那个"有调用没结果"的动作（第 3 节）
+- `UserRejectObservation` 的 `rejection_source='user'`（第 2 节逐字命中）
+- **拒绝之后状态又回到 `WAITING_FOR_CONFIRMATION`** ——
+  说明 agent 看到被拒后**提出了新的做法**,再次需要确认。
+  第 2 节说"AI 能看到自己被拒了…下一轮有机会换个做法" —— **实况如此。**
+
+### ⚠️ 但最有价值的是这个失败：`security_risk=UNKNOWN`
+
+**模型没有填那个风险字段。**（可能是因为我在会话创建**之后**才设
+`state.security_analyzer`,而第 9 节那个 `SecurityRiskAssessmentSection`
+的守卫是"有 LLM 风险分析器才出现"—— 解释该字段用途的提示段落可能没进系统提示。）
+
+**而确认仍然触发了** —— 因为 `ConfirmRisky.confirm_unknown=True`,
+也就是第 7 节我称为"整个安全体系最重要的一行默认值"的那个。
+
+> **这是对那条默认值最有说服力的验证方式：靠一次真实的失败。**
+> 模型没能给出风险评估 → 风险为 UNKNOWN → **策略照样停下来问**,
+> 而不是默默执行一条 `rm`。
+>
+> 索引第 14 条（"默认值要选忘了配置也不会出事的那个"）
+> 和第 8 条（失败关闭）**同时被一次真实失败证实。**
+
+---
+
+## 任务 D：Critic + 迭代精修 —— 发现一个盲区 ⚠️ 要修第 8 节
+
+```
+[D] status = FINISHED
+[D] agent_state = {}                    ← 精修计数器从未被设置
+[D] source='user' 的消息数 = 1           ← 没有注入任何追加要求
+（没有任何 finish 动作）
+```
+
+**AI 直接用一条消息回答了"2+2=4",没有调用 `finish` 工具。**
+于是迭代精修**完全没有参与**。
+
+### 读代码确认了原因
+
+`_check_iterative_refinement` 只有一个到达路径 —— `_ActionBatch.finalize`,
+而它开头就是：
+
+```python
+# Nothing to finalise: no FinishTool, or it was blocked by a hook.
+if not self.has_finish or self.action_events[-1].id in self.blocked_reasons:
+    return
+```
+
+**没有 FinishTool 调用就直接返回。** 而"模型只说话"的那条路
+（`_handle_content_response`）里**没有任何 critic / 精修的钩子。**
+
+### 所以第 8 节需要修正
+
+第 8 节写的是：
+
+> `conversation.run()` 结束后跑 critic 打分,低于阈值自动带着反馈重试
+
+**这句不准确。** 准确的说法是：
+**只有当 AI 通过 `finish` 工具收尾时,迭代精修才会参与。**
+如果它直接用一条消息回答（简单问题上很常见）,**整个精修回路被绕过。**
+
+critic 的 `mode="finish_and_message"` 描述的是**打分**时机,
+而**重试**只挂在 `FinishAction` 上 —— 这两件事在笔记里被我混成了一件。
+
+> **可迁移的道理**：**一个"收尾时触发"的机制,要考虑"收尾有几种形式"。**
+> 这里收尾有两种（调 finish 工具 / 直接发消息）,而增强逻辑只挂在其中一种上。
+> **这类盲区靠读代码很难发现 —— 因为两条路径在不同的函数里,
+> 不并排放在一起看不出遗漏。**
+
+---
+
+## 又三个在付费之前免费拿到的发现
+
+| 失败 | 发现 |
+|---|---|
+| `max_size=6, keep_first=2` 构造失败 | 压缩器校验器真的在创建时拦（索引第 39 条实况） |
+| `Conversation(max_budget_per_run=...)` TypeError | **预算闸门在公开工厂上够不着**（见第 5 节修正） |
+| `extended_thinking_budget=512` 被 Anthropic 拒 | **SDK 没有对厂商的 1024 下限做本地校验** |
+
+最后一条值得单独说：SDK 算的是 `min(budget, max_output_tokens - 1)`,
+**但不检查 Anthropic 要求的 `budget_tokens >= 1024`**。
+于是用户拿到一个 400,而不是像压缩器那样在构造时被拦住。
+
+> **索引第 39 条那套"配置自相矛盾在创建时报错"的纪律,在这个旋钮上缺了一块。**
+> 而且这个缺口有传染性：`extended_thinking_budget` 的默认值是 200,000,
+> 大多数人不会去改它,所以这个洞长期不会被发现。
